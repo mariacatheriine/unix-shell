@@ -1,9 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 #define USH_BUFF_SIZE 1024
 #define USH_TOK_BUFF_SIZE 64
 #define DELIM " \t\r\n\a"
+
+void ush_loop(void);
+char *ush_read_line(void);
+char **ush_split_line(char *line);
+int ush_launch(char **args);
+int ush_execute(char **args);
 
 int main(int argc, char **argv) {
     // looping function
@@ -13,7 +22,7 @@ int main(int argc, char **argv) {
     return EXIT_SUCCESS;
 }
 
-// function to loop and execute commands
+// function to loop commands
 void ush_loop(void) {
     char *line;
     char **args;
@@ -89,4 +98,39 @@ char **ush_split_line(char *line) {
     }
     tokens[position] = NULL;
     return tokens;
+}
+
+// function to start a program
+int ush_launch(char **args) {
+    pid_t pid, wpid;
+    int status;
+
+    pid = fork();
+    if (pid == 0) {
+        if (execvp(args[0], args) == -1) {
+            perror("ush");
+        }
+        exit(EXIT_FAILURE);
+    }
+    else if (pid < 0) {
+        perror("ush");
+    }
+    else {
+        do {
+            wpid = waitpid(pid, &status, WUNTRACED);
+            if (wpid == -1) {
+                perror("ush");
+                exit(EXIT_FAILURE);
+            }
+        } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+    }
+    return 1;
+}
+
+// function to execute a command
+int ush_execute(char **args) {
+    if (args[0] == NULL) {
+        return 1;
+    }
+    return ush_launch(args);
 }
