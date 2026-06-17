@@ -8,14 +8,22 @@
 #define USH_TOK_BUFF_SIZE 64
 #define DELIM " \t\r\n\a"
 
+typedef struct {
+    char **args1;
+    char **args2;
+} ush_pipe_args;
+
 void ush_loop(void);
 char *ush_read_line(void);
 char **ush_split_line(char *line);
 int ush_launch(char **args);
 int ush_execute(char **args);
+int ush_execute_piped(char **args1, char **args2);
 int ush_cd(char **args);
 int ush_help(char **args);
 int ush_exit(char **args);
+int ush_has_pipe(char **args);
+ush_pipe_args ush_split_pipe(char **args);
 
 int main(int argc, char **argv) {
     // looping function
@@ -35,7 +43,13 @@ void ush_loop(void) {
         printf("> ");
         line = ush_read_line();
         args = ush_split_line(line);
-        status = ush_execute(args);
+        if (ush_has_pipe(args)) {
+            ush_pipe_args pa = ush_split_pipe(args);
+            status = ush_execute_piped(pa.args1, pa.args2);
+        }
+        else {
+            status = ush_execute(args);
+        }
 
         free(line);
         free(args);
@@ -174,7 +188,7 @@ int ush_execute(char **args) {
     if (args[0] == NULL) {
         return 1;
     }
-    return ush_launch(args);
+    
     int i;
     for (i = 0; i < ush_num_builtins(); i++) {
         if (strcmp(args[0], builtin_str[i]) == 0) {
@@ -182,5 +196,66 @@ int ush_execute(char **args) {
         }
     }
     return ush_launch(args);
+}
+
+// function to check if a command has a pipe
+int ush_has_pipe(char **args) {
+    int i = 0;
+    while (args[i] != NULL) {
+        if (strcmp(args[i], "|") == 0) {
+            return 1;
+        }
+        i++;
+    }
+    return 0;
+}
+
+// function to execute a piped command
+int ush_execute_piped(char **args1, char **args2) {
+    int fds[2];
+    pid_t pid1, pid2;
+    if (pipe(fds) == -1) {
+        perror("ush");
+        exit(EXIT_FAILURE);
+    }
+    pid1 = fork();
+    if (pid1 == 0) {
+        dup2(fds[1], STDOUT_FILENO);
+        close(fds[0]);
+        close(fds[1]);
+        execvp(args1[0], args1);
+        perror("ush");
+        exit(EXIT_FAILURE);
+    }
+    pid2 = fork();
+    if (pid2 == 0) {
+        dup2(fds[0], STDIN_FILENO);
+        close(fds[0]);
+        close(fds[1]);
+        execvp(args2[0], args2);
+        perror("ush");
+        exit(EXIT_FAILURE);
+    }
+    close(fds[0]);
+    close(fds[1]);
+    waitpid(pid1, NULL, 0);
+    waitpid(pid2, NULL, 0);
+    return 1;
+}
+
+// function to split a piped command
+ush_pipe_args ush_split_pipe(char **args) {
+    ush_pipe_args result;
+    int i = 0;
+    while (args[i] != NULL) {
+        if (strcmp(args[i], "|") == 0) {
+            args[i] = NULL;
+            break;
+        }
+        i++;
+    }
+    result.args1 = args;
+    result.args2 = &args[i + 1];
+    return result;
 }
 
