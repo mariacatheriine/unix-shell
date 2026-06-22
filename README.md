@@ -64,5 +64,5 @@ Chain two commands together so the output of the first becomes the input of the 
 ## References
  
 - Stephen Brennan's Tutorial - Write a Shell in C
-- Indradhanush Gupta — Writing a Unix Shell
+- Indradhanush Gupta - Writing a Unix Shell
  
