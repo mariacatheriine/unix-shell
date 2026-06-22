@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 #define USH_BUFF_SIZE 1024
 #define USH_TOK_BUFF_SIZE 64
@@ -121,9 +122,50 @@ char **ush_split_line(char *line) {
 int ush_launch(char **args) {
     pid_t pid, wpid;
     int status;
+    char *input_file = NULL;
+    char *output_file = NULL;
+    int append = 0;
+
+    // check for input/output redirection
+    int i = 0;
+    while (args[i] != NULL) {
+        if (strcmp(args[i], ">") == 0) {
+            output_file = args[i + 1];
+            args[i] = NULL;
+        }
+        else if (strcmp(args[i], ">>") == 0) {
+            output_file = args[i + 1];
+            append = 1;
+            args[i] = NULL;
+        }
+        else if (strcmp(args[i], "<") == 0) {
+            input_file = args[i + 1];
+            args[i] = NULL;
+        }
+        i++;
+    }
 
     pid = fork();
     if (pid == 0) {
+        if (output_file != NULL) {
+            int flags = O_WRONLY | O_CREAT | (append ? O_APPEND : O_TRUNC);
+            int fd = open(output_file, flags, 0644);
+            if (fd == -1) {
+                perror("ush");
+                exit(EXIT_FAILURE);
+            }
+            dup2(fd, STDOUT_FILENO);
+            close(fd);
+        }
+        if (input_file != NULL) {
+            int fd = open(input_file, O_RDONLY);
+            if (fd == -1) {
+                perror("ush");
+                exit(EXIT_FAILURE);
+            }
+            dup2(fd, STDIN_FILENO);
+            close(fd);
+        }
         if (execvp(args[0], args) == -1) {
             perror("ush");
         }
