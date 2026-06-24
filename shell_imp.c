@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #define USH_BUFF_SIZE 1024
 #define USH_TOK_BUFF_SIZE 64
@@ -25,8 +26,11 @@ int ush_help(char **args);
 int ush_exit(char **args);
 int ush_has_pipe(char **args);
 ush_pipe_args ush_split_pipe(char **args);
+void ush_expand_env(char **args);
 
 int main(int argc, char **argv) {
+    signal(SIGINT, SIG_IGN);
+    signal(SIGQUIT, SIG_IGN);
     // looping function
     ush_loop();
 
@@ -44,6 +48,7 @@ void ush_loop(void) {
         printf("> ");
         line = ush_read_line();
         args = ush_split_line(line);
+        ush_expand_env(args);
         if (ush_has_pipe(args)) {
             ush_pipe_args pa = ush_split_pipe(args);
             status = ush_execute_piped(pa.args1, pa.args2);
@@ -147,6 +152,8 @@ int ush_launch(char **args) {
 
     pid = fork();
     if (pid == 0) {
+        signal(SIGINT, SIG_DFL);
+        signal(SIGQUIT, SIG_DFL);
         if (output_file != NULL) {
             int flags = O_WRONLY | O_CREAT | (append ? O_APPEND : O_TRUNC);
             int fd = open(output_file, flags, 0644);
@@ -262,6 +269,8 @@ int ush_execute_piped(char **args1, char **args2) {
     }
     pid1 = fork();
     if (pid1 == 0) {
+        signal(SIGINT, SIG_DFL);
+        signal(SIGQUIT, SIG_DFL);
         dup2(fds[1], STDOUT_FILENO);
         close(fds[0]);
         close(fds[1]);
@@ -271,6 +280,8 @@ int ush_execute_piped(char **args1, char **args2) {
     }
     pid2 = fork();
     if (pid2 == 0) {
+        signal(SIGINT, SIG_DFL);
+        signal(SIGQUIT, SIG_DFL);
         dup2(fds[0], STDIN_FILENO);
         close(fds[0]);
         close(fds[1]);
@@ -299,5 +310,19 @@ ush_pipe_args ush_split_pipe(char **args) {
     result.args1 = args;
     result.args2 = &args[i + 1];
     return result;
+}
+
+// function to expand environment variables in args
+void ush_expand_env(char **args) {
+    int i = 0;
+    while (args[i] != NULL) {
+        if (args[i][0] == '$') {
+            char *val = getenv(args[i] + 1);
+            if (val != NULL) {
+                args[i] = val;
+            }
+        }
+        i++;
+    }
 }
 
