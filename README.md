@@ -53,12 +53,28 @@ Chain two commands together so the output of the first becomes the input of the 
 > echo hello >> log.txt
 > sort < names.txt
 ```
+
+### Signal Handling
+Ctrl+C (SIGINT) and Ctrl+\ (SIGQUIT) kill the currently running command without terminating the shell itself.
+```
+> sleep 10   # press Ctrl+C — kills sleep, shell prompt returns
+```
+
+### Environment Variable Expansion
+Tokens starting with `$` are expanded to their environment variable values before execution.
+```
+> echo $HOME
+> echo $USER
+> cd $HOME
+```
  
 ## Implementation Notes
 
 - Uses fork() and execvp() for command execution
 - Pipes implemented using pipe(), dup2(), and two child processes
 - I/O redirection implemented using open() and dup2() inside the child process before execvp()
+- Signal handling using signal(), shell ignores SIGINT/SIGQUIT while child processes restore default behavior
+- Environment variable expansion using getenv() applied to all tokens before execution
 - Dynamic memory allocation for input buffer and token array with automatic resizing
  
 ## References
